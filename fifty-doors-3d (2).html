@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fifty Doors</title>
+<style>
+  :root{
+    --brass:#C9A24B; --lamp:#EFE3C7;
+    --serif:"Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#0A1310;color:var(--lamp);font-family:var(--sans);
+    display:flex;justify-content:center;padding:14px 12px 24px}
+  .wrap{width:100%;max-width:780px;display:flex;flex-direction:column;gap:10px}
+
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;color:#BCAE8E}
+  .door-no{font-family:var(--serif);font-size:19px;letter-spacing:.09em;color:var(--brass);
+    border:1px solid rgba(201,162,75,.5);padding:3px 12px;font-variant-numeric:tabular-nums}
+  .hp{flex:1;min-width:130px;display:flex;align-items:center;gap:9px}
+  .track{flex:1;height:8px;background:#08110E;border:1px solid rgba(201,162,75,.3);overflow:hidden}
+  .fill{height:100%;width:100%;background:linear-gradient(90deg,#59171E,#B3503F);transition:width .3s}
+  .tag{font-variant-numeric:tabular-nums} .tag b{color:var(--brass);font-size:14px;font-family:var(--serif)}
+
+  .screen{position:relative}
+  canvas{width:100%;height:auto;display:block;background:#000;
+    border:1px solid rgba(201,162,75,.25);cursor:crosshair;touch-action:none}
+
+  .line{min-height:2.6em;margin:0;text-align:center;font-family:var(--serif);
+    font-size:16px;line-height:1.5;color:#D6CBB0}
+  .line .warn{color:#E8836F} .line .good{color:var(--brass)}
+  .keys{text-align:center;font-size:12px;color:#8E8770;margin:0;line-height:1.7}
+
+  .inv{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+  .slot{width:82px;border:1px solid rgba(201,162,75,.28);background:#0D1A16;padding:6px 4px;
+    text-align:center;cursor:pointer;opacity:.42;transition:opacity .15s,border-color .15s}
+  .slot.has{opacity:1}
+  .slot.sel{border-color:var(--brass);background:#17302A}
+  .slot .n{display:block;font-size:9px;color:#8E8770;letter-spacing:.1em}
+  .slot .t{display:block;font-family:var(--serif);font-size:13px;color:var(--lamp);margin-top:1px}
+  .slot .c{display:block;font-size:11px;color:var(--brass);font-variant-numeric:tabular-nums}
+
+  .net{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;
+    font-size:12px;color:#8E8770;border-top:1px solid rgba(201,162,75,.2);padding-top:10px}
+  .net input{background:#0D1A16;border:1px solid rgba(201,162,75,.35);color:var(--lamp);
+    padding:6px 9px;font-family:var(--sans);font-size:12px;width:110px}
+  .net button{background:#17302A;border:1px solid rgba(201,162,75,.4);color:var(--lamp);
+    padding:6px 12px;font-size:12px;cursor:pointer}
+  .net b{color:var(--brass)}
+
+  .pad{display:none;gap:8px;justify-content:center;align-items:center;margin-top:2px;flex-wrap:wrap}
+  .pad button{width:52px;height:48px;font-size:16px;background:#17302A;color:var(--lamp);
+    border:1px solid rgba(201,162,75,.4);font-family:var(--serif)}
+  .pad .col{display:flex;flex-direction:column;gap:8px}
+  @media (hover:none) and (pointer:coarse){ .pad{display:flex} .keys{display:none} }
+
+  .over{position:fixed;inset:0;background:rgba(5,12,10,.93);display:flex;
+    align-items:center;justify-content:center;padding:20px}
+  .over[hidden]{display:none}
+  .card{max-width:410px;text-align:center;border:1px solid rgba(201,162,75,.4);
+    background:#12241F;padding:32px 28px}
+  .card h2{font-family:var(--serif);font-weight:500;font-size:28px;margin:0 0 10px;letter-spacing:.05em}
+  .card p{color:#C7BA9C;line-height:1.7;font-size:15px;margin:0 0 22px}
+  .card b{color:var(--brass)}
+  .btn{font-family:var(--serif);font-size:15px;padding:10px 24px;color:#2A2008;
+    background:linear-gradient(175deg,#D8B25C,#96762F);border:1px solid #6E561F;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <span class="door-no">Door <span id="doorNo">1</span> / 50</span>
+    <span class="hp">Health <span class="track"><span class="fill" id="fill"></span></span><span id="hpNo">100</span></span>
+    <span class="tag">Coins <b id="coinNo">0</b></span>
+    <span class="tag">Battery <b id="battNo">100</b>%</span>
+  </div>
+
+  <div class="screen"><canvas id="cv" width="640" height="400"></canvas></div>
+
+  <div class="inv" id="inv"></div>
+
+  <p class="line" id="line">Find the exit door. Fifty of them stand between you and the street.</p>
+  <p class="keys">W A S D move · mouse or ← → look · E search and hide · 1–6 pick a slot, Q cycles · F use it · C raise the crucifix · V first or third person</p>
+
+  <div class="net">
+    <span>Co-op room</span>
+    <input id="code" value="lobby" maxlength="12" spellcheck="false">
+    <button id="joinBtn">Join</button>
+    <span>Here with you: <b id="peerNo">0</b></span>
+    <span id="netNote">open a second window on this computer to play together</span>
+  </div>
+
+  <div class="pad">
+    <button data-k="turnl">↺</button>
+    <div class="col"><button data-k="w">↑</button><button data-k="s">↓</button></div>
+    <button data-k="turnr">↻</button>
+    <button data-k="e">E</button>
+    <button data-k="q">⇄</button>
+    <button data-k="f">Use</button>
+    <button data-k="c">✝</button>
+    <button data-k="v">◉</button>
+  </div>
+</div>
+
+<div class="over" id="over" hidden>
+  <div class="card">
+    <h2 id="ovTitle"></h2>
+    <p id="ovText"></p>
+    <button class="btn" id="again">Try again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const W = 640, H = 400, STRIP = 2, RAYS = W / STRIP;
+const lineEl = document.getElementById('line');
+
+const rnd = (a,b) => a + Math.random()*(b-a);
+const ri  = (a,b) => Math.floor(rnd(a,b+1));
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* seeded generator, so two players in the same co-op room walk into the same rooms */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash(s){
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+let R = Math.random;                       // swapped for a seeded one while a room is built
+const srnd = (a,b) => a + R()*(b-a);
+const sri  = (a,b) => Math.floor(srnd(a,b+1));
+const spick = a => a[Math.floor(R()*a.length)];
+
+/* ---------- shapes: boxes in local units, x across, y up from the floor ---------- */
+const SHAPES = {
+  bed:{w:1.9, r:.72, boxes:[
+    {x0:-.50,x1:.50,y0:0,y1:.11,c:[62,36,24]},
+    {x0:-.50,x1:.50,y0:.11,y1:.27,c:[140,46,50]},
+    {x0:-.50,x1:.50,y0:.25,y1:.28,c:[172,68,68]},
+    {x0:-.46,x1:-.18,y0:.27,y1:.36,c:[224,214,190]},
+    {x0:.40,x1:.50,y0:0,y1:.62,c:[52,30,20]}
+  ]},
+  table:{w:1.2, r:.52, boxes:[
+    {x0:-.50,x1:.50,y0:.40,y1:.47,c:[112,74,42]},
+    {x0:-.44,x1:-.33,y0:0,y1:.40,c:[72,46,26]},
+    {x0:.33,x1:.44,y0:0,y1:.40,c:[72,46,26]}
+  ]},
+  chair:{w:.62, r:.32, boxes:[
+    {x0:-.35,x1:.35,y0:.34,y1:.41,c:[102,66,38]},
+    {x0:-.34,x1:-.24,y0:0,y1:.34,c:[66,42,24]},
+    {x0:.24,x1:.34,y0:0,y1:.34,c:[66,42,24]},
+    {x0:-.32,x1:.32,y0:.41,y1:.76,c:[88,58,34]}
+  ]},
+  wardrobe:{w:1.05, r:.48, boxes:[
+    {x0:-.44,x1:.44,y0:0,y1:1.02,c:[70,40,24]},
+    {x0:-.40,x1:-.02,y0:.05,y1:.96,c:[106,60,36]},
+    {x0:.02,x1:.40,y0:.05,y1:.96,c:[106,60,36]},
+    {x0:-.07,x1:-.03,y0:.46,y1:.56,c:[201,162,75]},
+    {x0:.03,x1:.07,y0:.46,y1:.56,c:[201,162,75]}
+  ]},
+  nightstand:{w:.70, r:.36, boxes:[
+    {x0:-.40,x1:.40,y0:0,y1:.46,c:[118,82,44]},
+    {x0:-.34,x1:.34,y0:.10,y1:.22,c:[142,100,56]},
+    {x0:-.34,x1:.34,y0:.26,y1:.38,c:[142,100,56]},
+    {x0:-.07,x1:.07,y0:.15,y1:.18,c:[201,162,75]},
+    {x0:-.07,x1:.07,y0:.31,y1:.34,c:[201,162,75]}
+  ]},
+  open:{w:.70, r:.36, boxes:[
+    {x0:-.40,x1:.40,y0:0,y1:.46,c:[92,64,34]},
+    {x0:-.34,x1:.34,y0:.10,y1:.22,c:[24,16,10]},
+    {x0:-.34,x1:.34,y0:.26,y1:.38,c:[24,16,10]}
+  ]},
+  coin:{w:.40, r:0, glow:true, boxes:[
+    {x0:-.16,x1:.16,y0:.30,y1:.54,c:[186,146,58]},
+    {x0:-.09,x1:.09,y0:.33,y1:.51,c:[244,220,148]}
+  ]},
+  cross:{w:.55, r:0, glow:true, boxes:[
+    {x0:-.05,x1:.05,y0:.04,y1:.60,c:[214,176,90]},
+    {x0:-.20,x1:.20,y0:.38,y1:.48,c:[214,176,90]},
+    {x0:-.03,x1:.03,y0:.06,y1:.58,c:[248,232,180]}
+  ]},
+  pill:{w:.46, r:0, glow:true, boxes:[
+    {x0:-.11,x1:.11,y0:0,y1:.28,c:[226,220,208]},
+    {x0:-.11,x1:.11,y0:.22,y1:.28,c:[186,58,52]},
+    {x0:-.07,x1:.07,y0:.08,y1:.18,c:[186,58,52]}
+  ]},
+  kit:{w:.58, r:0, glow:true, boxes:[
+    {x0:-.21,x1:.21,y0:0,y1:.23,c:[228,222,208]},
+    {x0:-.04,x1:.04,y0:.04,y1:.19,c:[186,58,52]},
+    {x0:-.15,x1:.15,y0:.09,y1:.14,c:[186,58,52]}
+  ]},
+  torch:{w:.62, r:0, glow:true, boxes:[
+    {x0:-.22,x1:.09,y0:.02,y1:.15,c:[48,54,58]},
+    {x0:.09,x1:.22,y0:0,y1:.17,c:[128,136,140]},
+    {x0:.19,x1:.22,y0:.03,y1:.14,c:[250,242,204]}
+  ]},
+  zippo:{w:.38, r:0, glow:true, boxes:[
+    {x0:-.09,x1:.09,y0:0,y1:.18,c:[172,154,112]},
+    {x0:-.09,x1:.09,y0:.15,y1:.20,c:[102,90,66]}
+  ]},
+  batt:{w:.38, r:0, glow:true, boxes:[
+    {x0:-.07,x1:.07,y0:0,y1:.22,c:[54,60,66]},
+    {x0:-.07,x1:.07,y0:.18,y1:.22,c:[201,162,75]},
+    {x0:-.04,x1:.04,y0:.22,y1:.26,c:[201,162,75]}
+  ]},
+  skel:{w:.46, r:0, glow:true, boxes:[
+    {x0:-.17,x1:.09,y0:.07,y1:.11,c:[201,162,75]},
+    {x0:.09,x1:.18,y0:.03,y1:.15,c:[228,196,120]},
+    {x0:-.17,x1:-.12,y0:.11,y1:.18,c:[201,162,75]}
+  ]},
+  lamp:{w:.85, r:0, anchor:'ceiling', glow:true, boxes:[
+    {x0:-.02,x1:.02,y0:0,y1:.20,c:[36,36,32]},
+    {x0:-.28,x1:.28,y0:.20,y1:.24,c:[96,84,54]},
+    {x0:-.22,x1:.22,y0:.24,y1:.33,c:[132,116,74]},
+    {x0:-.10,x1:.10,y0:.31,y1:.40,c:[255,246,206]}
+  ]},
+  dead:{w:.85, r:0, anchor:'ceiling', boxes:[
+    {x0:-.02,x1:.02,y0:0,y1:.20,c:[30,30,28]},
+    {x0:-.28,x1:.28,y0:.20,y1:.24,c:[52,46,32]},
+    {x0:-.22,x1:.22,y0:.24,y1:.33,c:[62,56,40]},
+    {x0:-.09,x1:.09,y0:.31,y1:.39,c:[70,66,54]}
+  ]},
+  broke:{w:.85, r:0, anchor:'ceiling', boxes:[
+    {x0:-.02,x1:.02,y0:0,y1:.21,c:[26,26,24]},
+    {x0:-.28,x1:.28,y0:.21,y1:.25,c:[44,38,28]},
+    {x0:-.22,x1:-.12,y0:.25,y1:.30,c:[54,48,34]},
+    {x0:.12,x1:.22,y0:.25,y1:.28,c:[54,48,34]},
+    {x0:-.05,x1:.02,y0:.25,y1:.32,c:[120,124,116]}
+  ]},
+  /* blocky avatar, built like a toy figure */
+  avatar:{w:1.05, r:0, boxes:[
+    {x0:-.34,x1:-.06,y0:0,y1:.42,c:[46,72,112], leg:-1},
+    {x0:.06,x1:.34,y0:0,y1:.42,c:[46,72,112], leg:1},
+    {x0:-.34,x1:.34,y0:.42,y1:.78,c:[52,132,124]},
+    {x0:-.50,x1:-.34,y0:.40,y1:.76,c:[232,196,52], arm:-1},
+    {x0:.34,x1:.50,y0:.40,y1:.76,c:[232,196,52], arm:1},
+    {x0:-.23,x1:.23,y0:.80,y1:1.12,c:[232,196,52]},
+    {x0:-.15,x1:-.07,y0:.97,y1:1.03,c:[26,22,18], face:1},
+    {x0:.07,x1:.15,y0:.97,y1:1.03,c:[26,22,18], face:1},
+    {x0:-.10,x1:.10,y0:.89,y1:.92,c:[26,22,18], face:1}
+  ]},
+  charger:{w:1.7, r:0, boxes:[
+    {x0:-.50,x1:.50,y0:0,y1:1.30,c:[12,3,6]},
+    {x0:-.22,x1:.22,y0:1.30,y1:1.62,c:[16,4,8]},
+    {x0:-.19,x1:-.06,y0:1.44,y1:1.52,c:[236,110,84]},
+    {x0:.06,x1:.19,y0:1.44,y1:1.52,c:[236,110,84]}
+  ]},
+  listener:{w:.95, r:0, boxes:[
+    {x0:-.20,x1:.20,y0:0,y1:1.18,c:[9,7,9]},
+    {x0:-.44,x1:-.18,y0:.55,y1:1.10,c:[9,7,9]},
+    {x0:.18,x1:.44,y0:.55,y1:1.10,c:[9,7,9]},
+    {x0:-.13,x1:.13,y0:1.18,y1:1.46,c:[13,10,12]},
+    {x0:-.11,x1:-.03,y0:1.30,y1:1.36,c:[226,220,206]},
+    {x0:.03,x1:.11,y0:1.30,y1:1.36,c:[226,220,206]}
+  ]}
+};
+
+/* ---------- carried things ---------- */
+const ITEMS = {
+  flashlight:{name:'Flashlight', shape:'torch',  once:true},
+  lighter:   {name:'Lighter',    shape:'zippo',  once:true},
+  vitamins:  {name:'Vitamins',   shape:'pill'},
+  bandage:   {name:'Bandage',    shape:'kit'},
+  crucifix:  {name:'Crucifix',   shape:'cross'},
+  skeleton:  {name:'Skel. key',  shape:'skel'},
+  battery:   {name:'Battery',    shape:'batt',   auto:true}   // never held, drunk straight down
+};
+const SLOTS = ['flashlight','lighter','vitamins','bandage','crucifix','skeleton'];
+
+const G = {
+  door:1, hp:100, coins:0, over:false,
+  inv:{lighter:1}, sel:1, torch:false, lit:false, battery:100,
+  MW:16, MH:13, map:[],
+  px:8, py:11, dir:-Math.PI/2, plane:.66, view:'first',
+  locked:false, hasKey:false, dark:false, exitX:8,
+  closets:[], props:[], lamps:[],
+  hidden:null, ev:null, walk:0, holdCross:0,
+  bob:0, shake:0, fade:1, flash:0, pop:0, holy:0, t:0,
+  me: 'p' + Math.floor(Math.random()*100000),
+  peers: {}, room:'lobby', seed:hash('lobby')
+};
+
+/* ---------- input ---------- */
+const keys = {};
+let useE = false, useF = false, useC = false, mouseDX = 0;
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k)) e.preventDefault();
+  if(e.target && e.target.tagName === 'INPUT') return;
+  if(k === 'e' && !keys.e) useE = true;
+  if(k === 'f' && !keys.f) useF = true;
+  if(k === 'c' && !keys.c) useC = true;
+  if(k === 'v' && !keys.v) toggleView();
+  if(k === 'q' && !keys.q) selectSlot((G.sel + 1) % SLOTS.length);
+  if(k >= '1' && k <= '6') selectSlot(+k - 1);
+  keys[k] = true;
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+cv.addEventListener('click', () => { if(cv.requestPointerLock) cv.requestPointerLock(); });
+addEventListener('mousemove', e => {
+  if(document.pointerLockElement === cv) mouseDX += e.movementX * 0.0022;
+});
+let touchX = null;
+cv.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, {passive:true});
+cv.addEventListener('touchmove', e => {
+  if(touchX !== null){ mouseDX += (e.touches[0].clientX - touchX) * 0.006; touchX = e.touches[0].clientX; }
+  e.preventDefault();
+});
+cv.addEventListener('touchend', () => { touchX = null; });
+document.querySelectorAll('.pad button').forEach(b => {
+  const k = b.dataset.k;
+  const on = e => {
+    e.preventDefault();
+    if(k === 'e' && !keys.e) useE = true;
+    if(k === 'f' && !keys.f) useF = true;
+    if(k === 'c' && !keys.c) useC = true;
+    if(k === 'v' && !keys.v) toggleView();
+    if(k === 'q' && !keys.q) selectSlot((G.sel + 1) % SLOTS.length);
+    keys[k] = true;
+  };
+  const off = e => { e.preventDefault(); keys[k] = false; };
+  b.addEventListener('touchstart', on); b.addEventListener('touchend', off);
+  b.addEventListener('mousedown', on);  b.addEventListener('mouseup', off);
+  b.addEventListener('mouseleave', off);
+});
+function toggleView(){
+  G.view = G.view === 'first' ? 'third' : 'first';
+  say(G.view === 'third' ? 'Camera pulled back behind you.' : 'Camera back to your own eyes.');
+}
+
+/* ---------- room ---------- */
+const at = (x,y) => (x<0||y<0||x>=G.MW||y>=G.MH) ? 1 : G.map[y][x];
+const isWall = v => v === 1 || v === 3 || v === 4;
+
+function freeSpot(minGap){
+  for(let t=0;t<60;t++){
+    const x = srnd(1.6, G.MW-1.6), y = srnd(1.6, G.MH-1.9);
+    if(Math.abs(x - (G.exitX+0.5)) < 1.3 && y < 3) continue;
+    if(y > G.MH-3.2 && Math.abs(x - G.MW/2) < 1.8) continue;
+    if(G.props.every(p => Math.hypot(p.x-x, p.y-y) > minGap)) return {x,y};
+  }
+  return null;
+}
+function addProp(kind, opts){
+  const spot = freeSpot(SHAPES[kind].r ? 1.35 : 0.9);
+  if(!spot) return null;
+  const p = Object.assign({kind, x:spot.x, y:spot.y, r:SHAPES[kind].r}, opts||{});
+  G.props.push(p);
+  return p;
+}
+
+function buildRoom(){
+  const d = G.door;
+  R = mulberry32(G.seed + d*7919);          // same seed, same room, for everyone in the co-op room
+
+  G.MW = sri(13,19); G.MH = sri(11,15);
+  G.locked = d > 2 && R() < 0.5;
+  G.dark   = d > 5 && R() < 0.32;
+  G.hasKey = false; G.hidden = null; G.ev = null; G.fade = 1;
+  G.props = []; G.closets = []; G.lamps = [];
+
+  G.map = Array.from({length:G.MH}, (_,y) =>
+    Array.from({length:G.MW}, (_,x) => (x===0||y===0||x===G.MW-1||y===G.MH-1) ? 1 : 0));
+  G.exitX = sri(2, G.MW-3);
+  G.map[0][G.exitX] = 4;
+  G.px = G.MW/2; G.py = G.MH-1.7; G.dir = -Math.PI/2;
+
+  for(let i=0;i<sri(2,3);i++){
+    for(let t=0;t<25;t++){
+      const left = R() < 0.5;
+      const x = left ? 0 : G.MW-1, y = sri(2, G.MH-3);
+      if(at(x,y) === 1 && !G.closets.some(c => c.x === x && Math.abs(c.y-y) < 2)){
+        G.map[y][x] = 3;
+        G.closets.push({x, y, inx: left ? 1 : G.MW-2});
+        break;
+      }
+    }
+  }
+
+  addProp('bed');
+  if(R() < 0.5) addProp('bed');
+  for(let i=0;i<sri(1,2);i++) addProp('table');
+  for(let i=0;i<sri(1,3);i++) addProp('chair');
+  for(let i=0;i<sri(1,2);i++) addProp('wardrobe');
+
+  const stands = [];
+  for(let i=0;i<sri(3,4);i++){
+    const p = addProp('nightstand', {searched:false, key:false});
+    if(!p) continue;
+    const r = R();
+    p.loot = r < .30 ? null
+           : r < .54 ? {coins:sri(4,12)}
+           : r < .70 ? {item:'bandage'}
+           : r < .79 ? {item:'vitamins'}
+           : r < .88 ? {item:'battery'}
+           : r < .93 ? {item:'flashlight'}
+           : r < .98 ? {item:'crucifix'}
+           : {item:'skeleton'};
+    stands.push(p);
+  }
+  if(G.locked){ if(stands.length) spick(stands).key = true; else G.locked = false; }
+
+  for(let i=0;i<sri(2,5);i++) addProp('coin', {value:sri(3,9), gone:false, phase:srnd(0,6.28)});
+
+  // loose items on the floor
+  const floor = [['crucifix',.20],['flashlight',.16],['bandage',.20],['vitamins',.14],['battery',.16]];
+  for(const [id,chance] of floor){
+    if(d >= 2 && R() < chance) addProp(ITEMS[id].shape, {gone:false, item:id});
+  }
+
+  for(let i=0;i<sri(1,2);i++){
+    G.lamps.push({
+      x: srnd(2.5, G.MW-2.5), y: srnd(2.5, G.MH-2.5),
+      on: !G.dark && R() < 0.9,
+      faulty: R() < 0.35, broken: false,
+      i:1, target:1, hold:srnd(0.5,5), burst:0, dim:false, seed:srnd(0,6.28)
+    });
+  }
+
+  say(G.locked ? 'The door will not turn. The key is in one of these drawers.'
+    : G.dark ? 'The bulbs in here are dead. Your light only reaches so far.'
+    : spick(['The corridor continues.','Another room. Another door.','Somebody slept here recently.','The carpet squelches underfoot.']));
+
+  const forced = d >= 4 && d % 3 === 1;
+  const willSpawn = d >= 3 && (forced || R() < 0.55);
+  const kind = R() < 0.6 ? 'charger' : 'listener';
+  const delay = srnd(1600, 4200);
+  R = Math.random;                                             // flicker and shake stay unseeded
+  if(willSpawn) setTimeout(() => { if(!G.over && G.door === d) startEvent(kind); }, delay);
+}
+
+/* ---------- events ---------- */
+function startEvent(type){
+  if(G.ev || G.over) return;
+  if(G.inv.crucifix) selectSlot(SLOTS.indexOf('crucifix'));   // put it in your hand for you
+  if(type === 'charger'){
+    const win = rnd(3,5);
+    G.ev = {type, phase:'warn', t:win, total:win, x:G.exitX+0.5, y:1.0};
+    say('<span class="warn">The lights stutter. Something is coming down the hall — get in a closet.</span>');
+  } else {
+    G.ev = {type, phase:'watch', t:5.4, x:G.px + rnd(-2,2), y:Math.max(1.5, G.py - rnd(2.5,4.5))};
+    smashAll();
+    say('<span class="warn">The bulbs burst together and a tall shape rises in the dark. It hunts by sound. Stand still.</span>');
+  }
+}
+/* every bulb it goes under bursts, and stays burst for the rest of the room */
+function smash(L){
+  if(L.broken) return;
+  L.broken = true; L.on = false; L.i = 0;
+  G.pop = 1; G.shake = Math.max(G.shake, 0.35);
+  if(!G.lamps.some(l => l.on)) G.dark = true;      // your own light is all that is left
+}
+function smashAll(){
+  let n = 0;
+  for(const L of G.lamps) if(!L.broken){ smash(L); n++; }
+  return n;
+}
+
+function hurt(n, msg){
+  G.hp -= n; G.shake = 0.6;
+  say('<span class="warn">' + msg + ' −' + n + ' health</span>');
+  paintHud();
+  if(G.hp <= 0) end('The hallway keeps you',
+    'You went dark on <b>door ' + G.door + '</b> with <b>' + G.coins + ' coins</b>.');
+}
+function updateEvent(dt){
+  const e = G.ev; if(!e) return;
+  e.t -= dt;
+  if(e.type === 'charger'){
+    if(e.phase === 'warn'){
+      const near = 1 - Math.max(0, e.t)/e.total;
+      G.shake = Math.max(G.shake, 0.05 + 0.30*near*near);
+      if(e.t <= 0){
+        e.phase = 'run'; e.x = G.hidden ? G.MW/2 : G.px; e.y = 0.6;
+        smashAll();
+        say('<span class="warn">Every bulb in the room goes at once. It is in here with you.</span>');
+      }
+    } else {
+      e.y += 7.2 * dt;
+      if(!G.hidden && Math.hypot(e.x-G.px, e.y-G.py) < 0.95){
+        G.ev = null; hurt(46, 'It comes through you without slowing.'); return;
+      }
+      if(e.y > G.MH + 1){
+        G.ev = null;
+        say(G.hidden
+          ? '<span class="good">It passes. The closet door rattles, then it is quiet.</span>'
+          : 'It is gone. So is most of the light.');
+      }
+    }
+  } else if(e.t <= 0){
+    G.ev = null; say('<span class="good">It stops listening and folds back into the dark.</span>');
+  }
+}
+
+/* ---------- inventory ---------- */
+function selectSlot(i){
+  G.sel = i;
+  paintInv();
+}
+
+function give(id){
+  const it = ITEMS[id];
+  if(id === 'battery'){
+    G.battery = Math.min(100, G.battery + 45);
+    say('<span class="good">A fresh cell. Battery back up to ' + Math.round(G.battery) + '%.</span>');
+  } else if(it.once && G.inv[id]){
+    G.battery = Math.min(100, G.battery + 30);
+    say('<span class="good">Another ' + it.name.toLowerCase() + '. You strip it for the cell instead.</span>');
+  } else {
+    G.inv[id] = (G.inv[id] || 0) + 1;
+    say('<span class="good">' + it.name + ' — slot ' + (SLOTS.indexOf(id)+1) + '.</span>');
+    if(SLOTS.indexOf(id) >= 0 && !G.inv[SLOTS[G.sel]]) selectSlot(SLOTS.indexOf(id));
+  }
+  G.flash = 0.5;
+  paintHud(); paintInv();
+}
+
+function raiseCross(){
+  if(!G.inv.crucifix){ say('<span class="warn">You have no crucifix to raise.</span>'); return; }
+  G.holdCross = 1.2;
+  const e = G.ev;
+  if(!e){ say('You hold it out at an empty room. Nothing answers.'); return; }
+  const vx = e.x - G.px, vy = e.y - G.py, d = Math.hypot(vx, vy) || 1e-6;
+  const aim = (vx/d)*Math.cos(G.dir) + (vy/d)*Math.sin(G.dir);
+  if(d > 8){ say('<span class="warn">Too far off. Let it come closer, then raise it again.</span>'); return; }
+  if(aim < 0.15){ say('<span class="warn">It is not in front of you. Turn towards it and raise it again.</span>'); return; }
+  G.ev = null; G.inv.crucifix--; G.holy = 1; G.flash = 0.7;
+  say('<span class="good">It comes apart in front of you like smoke pulled up a chimney.</span>');
+  paintHud(); paintInv();
+}
+
+function useItem(){
+  // if something is in the room with you, the cross takes priority over whatever slot is up
+  if(G.ev && G.inv.crucifix && SLOTS[G.sel] !== 'crucifix'){ raiseCross(); return; }
+
+  const id = SLOTS[G.sel];
+  if(!G.inv[id]){ say('That slot is empty.'); return; }
+
+  if(id === 'flashlight'){
+    if(!G.torch && G.battery <= 0){ say('<span class="warn">The cell is flat. You need a battery.</span>'); return; }
+    G.torch = !G.torch;
+    say(G.torch ? 'The beam cuts a long cone down the room.' : 'You switch the beam off to save the cell.');
+  } else if(id === 'lighter'){
+    G.lit = !G.lit;
+    say(G.lit ? 'A small flame. It shows you your own hands and not much else.' : 'You snap the lighter shut.');
+  } else if(id === 'vitamins'){
+    if(G.hp >= 100){ say('You are not hurt.'); return; }
+    G.hp = Math.min(100, G.hp + 30); G.inv.vitamins--;
+    say('<span class="good">You dry-swallow two. +30 health</span>');
+  } else if(id === 'bandage'){
+    if(G.hp >= 100){ say('Nothing to dress.'); return; }
+    G.hp = Math.min(100, G.hp + 18); G.inv.bandage--;
+    say('<span class="good">You wrap it tight. +18 health</span>');
+  } else if(id === 'skeleton'){
+    if(!G.locked || G.hasKey){ say('Nothing here needs it.'); return; }
+    G.hasKey = true; G.inv.skeleton--;
+    say('<span class="good">The old key turns like it was cut for this lock.</span>');
+  } else if(id === 'crucifix'){
+    raiseCross();
+    return;
+  }
+  paintHud(); paintInv();
+}
+
+function paintInv(){
+  const box = document.getElementById('inv');
+  if(!box.children.length){
+    SLOTS.forEach((id,i) => {
+      const d = document.createElement('div');
+      d.className = 'slot';
+      d.innerHTML = '<span class="n">' + (i+1) + '</span><span class="t">' + ITEMS[id].name + '</span><span class="c"></span>';
+      d.addEventListener('click', () => selectSlot(i));
+      box.appendChild(d);
+    });
+  }
+  SLOTS.forEach((id,i) => {
+    const d = box.children[i], n = G.inv[id] || 0;
+    d.className = 'slot' + (n ? ' has' : '') + (i === G.sel ? ' sel' : '');
+    const on = (id === 'flashlight' && G.torch) || (id === 'lighter' && G.lit);
+    d.lastChild.textContent = !n ? '—' : ITEMS[id].once ? (on ? 'on' : 'off') : '×' + n;
+  });
+}
+
+/* ---------- movement ---------- */
+function canStand(x, y){
+  const r = 0.22;
+  for(const [ox,oy] of [[r,r],[r,-r],[-r,r],[-r,-r]])
+    if(isWall(at(Math.floor(x+ox), Math.floor(y+oy)))) return false;
+  for(const p of G.props){
+    if(!p.r || p.gone) continue;
+    if(Math.hypot(p.x-x, p.y-y) < p.r) return false;
+  }
+  return true;
+}
+const moving = () => keys.w || keys.s || keys.a || keys.d;
+
+function move(dt){
+  let turn = mouseDX; mouseDX = 0;
+  if(keys.arrowleft  || keys.turnl) turn -= 1.9 * dt;
+  if(keys.arrowright || keys.turnr) turn += 1.9 * dt;
+  G.dir += turn;
+  if(G.over) return;
+
+  if(G.hidden){
+    if(moving() && !(G.ev && G.ev.type === 'charger' && G.ev.phase === 'run')) leaveCloset();
+    return;
+  }
+
+  const sp = 2.8 * dt;
+  let fwd = 0, str = 0;
+  if(keys.w) fwd += 1;
+  if(keys.s) fwd -= 1;
+  if(keys.a) str -= 1;
+  if(keys.d) str += 1;
+
+  if((fwd || str) && G.ev && G.ev.type === 'listener'){
+    G.ev = null;
+    hurt(32, 'You shift your weight and the floor answers. It is on you before you turn.');
+    return;
+  }
+  if(!fwd && !str){ G.walk = 0; return; }
+
+  const dx = Math.cos(G.dir), dy = Math.sin(G.dir);
+  const nx = G.px + (dx*fwd - dy*str) * sp;
+  const ny = G.py + (dy*fwd + dx*str) * sp;
+  if(canStand(nx, G.py)) G.px = nx;
+  if(canStand(G.px, ny)) G.py = ny;
+  G.bob += sp * 6; G.walk += dt * 9;
+
+  G.props.forEach(p => {
+    if(p.gone || Math.hypot(p.x-G.px, p.y-G.py) > 0.6) return;
+    if(p.kind === 'coin'){ p.gone = true; G.coins += p.value; G.flash = 0.5; paintHud(); }
+    else if(p.item){ p.gone = true; give(p.item); }
+  });
+
+  if(G.py < 1.4 && Math.abs(G.px - (G.exitX + 0.5)) < 0.75){
+    if(G.locked && !G.hasKey){ say('Locked. The key is in one of the drawers.'); G.py += 0.2; }
+    else nextRoom();
+  }
+}
+
+/* ---------- interaction ---------- */
+function focused(){
+  if(G.hidden) return {kind:'out'};
+  let best = null, bd = 1.5;
+  for(const c of G.closets){
+    const d = Math.hypot(c.inx+0.5-G.px, c.y+0.5-G.py);
+    if(d < bd){ bd = d; best = {kind:'closet', c}; }
+  }
+  for(const p of G.props){
+    if(p.kind !== 'nightstand' || p.searched) continue;
+    const d = Math.hypot(p.x-G.px, p.y-G.py);
+    if(d < Math.min(bd, 1.3)){ bd = d; best = {kind:'drawer', p}; }
+  }
+  return best;
+}
+function leaveCloset(){
+  const c = G.hidden; G.hidden = null;
+  G.px = c.inx + 0.5; G.py = c.y + 0.5;
+  G.dir = c.x === 0 ? 0 : Math.PI;
+  say('You step back out into the room.');
+}
+function interact(){
+  const f = focused();
+  if(!f) return;
+  if(f.kind === 'out'){
+    if(G.ev && G.ev.type === 'charger' && G.ev.phase === 'run'){
+      say('<span class="warn">Not yet. It is still in the room.</span>'); return;
+    }
+    leaveCloset();
+  } else if(f.kind === 'closet'){
+    G.hidden = f.c;
+    G.px = f.c.x + 0.5; G.py = f.c.y + 0.5;
+    G.dir = f.c.x === 0 ? 0 : Math.PI;
+    say('You pull the closet door shut and breathe through your mouth.');
+  } else {
+    f.p.searched = true;
+    if(f.p.key){ G.hasKey = true; say('<span class="good">A brass key, wrapped in a napkin. The door will open now.</span>'); }
+    else if(f.p.loot && f.p.loot.coins){
+      G.coins += f.p.loot.coins; G.flash = 0.4; paintHud();
+      say('<span class="good">Loose change under the lining. +' + f.p.loot.coins + ' coins</span>');
+    }
+    else if(f.p.loot && f.p.loot.item) give(f.p.loot.item);
+    else say(pick(['Receipts and a dead lighter.','Empty, apart from sand.','A guest ledger. Every name is the same.','Somebody else\'s reading glasses.']));
+  }
+}
+function nextRoom(){
+  G.door++;
+  if(G.door > 50){
+    end('You are out', 'Fifty doors, and the last one opened onto morning. You carried out <b>' + G.coins + ' coins</b>.');
+    return;
+  }
+  paintHud(); buildRoom();
+}
+
+/* ---------- lighting ---------- */
+function stepLamps(dt){
+  const warn = G.ev && G.ev.type === 'charger' && G.ev.phase === 'warn';
+  const run  = G.ev && G.ev.type === 'charger' && G.ev.phase === 'run';
+  for(const L of G.lamps){
+    if(!L.on){ L.i = 0; continue; }
+    if(run){ L.i += (0.02 - L.i) * Math.min(1, dt*9); continue; }
+    if(warn && L.burst <= 0){ L.burst = ri(4,10); L.hold = Math.min(L.hold, 0.04); }
+    L.hold -= dt;
+    if(L.hold <= 0){
+      if(L.burst > 0){
+        L.burst--; L.dim = !L.dim;
+        L.target = L.dim ? rnd(0.03,0.26) : rnd(0.86,1.12);
+        L.hold   = L.dim ? rnd(0.03,0.15) : rnd(0.04,0.18);
+      } else {
+        L.dim = false; L.target = 1;
+        L.hold = L.faulty ? rnd(0.6,3.2) : rnd(4,11);
+        L.burst = ri(2,6);
+      }
+    }
+    L.i += (L.target - L.i) * Math.min(1, dt*40);
+    L.i *= 0.984 + 0.016*Math.sin(G.t*47 + L.seed);
+  }
+}
+function litness(wx, wy, distToEye){
+  const reach = (G.dark ? 3.2 : 5.0) + (G.lit ? 1.5 : 0);
+  let f = Math.max(0, 1 - distToEye/reach) * 0.95;
+  if(G.torch && G.battery > 0){
+    const vx = wx - G.px, vy = wy - G.py, m = Math.hypot(vx, vy) || 1e-6;
+    const aim = (vx/m)*Math.cos(G.dir) + (vy/m)*Math.sin(G.dir);
+    if(aim > 0.80){                                   // a cone, not a bubble
+      const beam = Math.max(0, 1 - m/9.5) * (1 - (1-aim)*3.2);
+      if(beam > f) f = beam;
+    }
+  }
+  for(const L of G.lamps){
+    if(!L.on || L.i < 0.03) continue;
+    const lf = Math.max(0, 1 - Math.hypot(L.x-wx, L.y-wy)/4.2) * L.i;
+    if(lf > f) f = lf;
+  }
+  if(G.holy > 0) f = Math.min(1.3, f + G.holy*0.5);
+  return Math.max(0.05, Math.min(1.3, f));
+}
+
+/* ---------- camera ---------- */
+function camera(){
+  if(G.view === 'first' || G.hidden) return {x:G.px, y:G.py, third:false};
+  const dx = Math.cos(G.dir), dy = Math.sin(G.dir);
+  let back = 0;
+  for(let s=0.2; s<=2.6; s+=0.2){
+    const cx = G.px - dx*s, cy = G.py - dy*s;
+    if(isWall(at(Math.floor(cx), Math.floor(cy)))) break;
+    back = s;
+  }
+  return {x:G.px - dx*back, y:G.py - dy*back, third: back > 0.35};
+}
+
+/* ---------- rendering ---------- */
+const zbuf = new Float32Array(RAYS);
+const shade = (c,f) => 'rgb(' + Math.min(255,c[0]*f|0) + ',' + Math.min(255,c[1]*f|0) + ',' + Math.min(255,c[2]*f|0) + ')';
+
+function draw(){
+  const cam = camera();
+  const dx = Math.cos(G.dir), dy = Math.sin(G.dir);
+  const pxp = -dy * G.plane, pyp = dx * G.plane;
+  const sh = G.shake;
+  ctx.save();
+  ctx.translate(sh ? rnd(-5,5)*sh : 0, (sh ? rnd(-5,5)*sh : 0) + Math.sin(G.bob)*2.5);
+
+  let amb = 0;
+  for(const L of G.lamps) if(L.on && L.i > amb) amb = L.i;
+  let g = ctx.createLinearGradient(0,0,0,H/2);
+  g.addColorStop(0, shade([12,24,21], 0.5 + 0.9*amb));
+  g.addColorStop(1, shade([32,62,56], 0.45 + 0.95*amb));
+  ctx.fillStyle = g; ctx.fillRect(-8,-14,W+16,H/2+14);
+  g = ctx.createLinearGradient(0,H/2,0,H);
+  g.addColorStop(0, shade([84,28,33], 0.45 + 0.95*amb));
+  g.addColorStop(1, shade([22,8,11], 0.6 + 0.6*amb));
+  ctx.fillStyle = g; ctx.fillRect(-8,H/2,W+16,H/2+18);
+
+  /* walls */
+  for(let r=0;r<RAYS;r++){
+    const cm = 2*r/RAYS - 1;
+    const rdx = dx + pxp*cm, rdy = dy + pyp*cm;
+    let mx = Math.floor(cam.x), my = Math.floor(cam.y);
+    const ddx = Math.abs(1/(rdx||1e-9)), ddy = Math.abs(1/(rdy||1e-9));
+    let stepX, stepY, sdx, sdy;
+    if(rdx < 0){ stepX = -1; sdx = (cam.x-mx)*ddx; } else { stepX = 1; sdx = (mx+1-cam.x)*ddx; }
+    if(rdy < 0){ stepY = -1; sdy = (cam.y-my)*ddy; } else { stepY = 1; sdy = (my+1-cam.y)*ddy; }
+
+    let side = 0, cell = 1, guard = 0;
+    while(guard++ < 90){
+      if(sdx < sdy){ sdx += ddx; mx += stepX; side = 0; }
+      else { sdy += ddy; my += stepY; side = 1; }
+      cell = at(mx,my);
+      if(isWall(cell)) break;
+    }
+    const dist = side === 0 ? (mx - cam.x + (1-stepX)/2)/(rdx||1e-9)
+                            : (my - cam.y + (1-stepY)/2)/(rdy||1e-9);
+    const pd = Math.max(0.06, dist);
+    zbuf[r] = pd;
+
+    const lh = H/pd, y0 = (H-lh)/2, y1 = (H+lh)/2;
+    const hx = cam.x + pd*rdx, hy = cam.y + pd*rdy;
+
+    let base = cell === 3 ? [112,52,34]
+             : cell === 4 ? ((G.locked && !G.hasKey) ? [86,42,28] : [158,88,50])
+             : [44,82,72];
+    let f = litness(hx, hy, pd) * (side ? 0.74 : 1);
+    const u = side === 0 ? hy - Math.floor(hy) : hx - Math.floor(hx);
+    if(u < 0.04 || u > 0.96) f *= 0.55;
+    if(cell === 3 && u > 0.18 && u < 0.82) f *= 1.15;
+
+    ctx.fillStyle = shade(base, f);
+    ctx.fillRect(r*STRIP, y0, STRIP+1, y1-y0);
+
+    if(cell === 1){
+      ctx.fillStyle = shade([30,56,50], f);
+      ctx.fillRect(r*STRIP, H/2 + lh*0.16, STRIP+1, Math.max(1, lh*0.035));
+      if(pd < 8){                                   // blocky brick courses
+        ctx.fillStyle = shade([34,64,56], f*0.9);
+        ctx.fillRect(r*STRIP, H/2 - lh*0.16, STRIP+1, Math.max(1, lh*0.018));
+        ctx.fillRect(r*STRIP, H/2 - lh*0.40, STRIP+1, Math.max(1, lh*0.018));
+      }
+    }
+    if(cell === 3 && Math.abs(u-0.66) < 0.045 && pd < 5){
+      ctx.fillStyle = shade([201,162,75], f*1.25);
+      ctx.fillRect(r*STRIP, H/2 - lh*0.03, STRIP+1, Math.max(2, lh*0.06));
+    }
+    if(cell === 4 && !(G.locked && !G.hasKey) && Math.abs(u-0.78) < 0.045 && pd < 7){
+      ctx.fillStyle = shade([240,214,140], f*1.3);
+      ctx.fillRect(r*STRIP, H/2 - lh*0.02, STRIP+1, Math.max(2, lh*0.06));
+    }
+  }
+
+  /* sprite list */
+  const list = [];
+  G.props.forEach(p => {
+    if(p.gone) return;
+    list.push({x:p.x, y:p.y, kind:(p.kind === 'nightstand' && p.searched) ? 'open' : p.kind, ref:p});
+  });
+  G.lamps.forEach(L => list.push({
+    x:L.x, y:L.y,
+    kind: L.broken ? 'broke' : (L.on && L.i > 0.14) ? 'lamp' : 'dead',
+    lit: L.on ? L.i : 0
+  }));
+  if(G.ev && (G.ev.type === 'listener' || G.ev.phase === 'run'))
+    list.push({x:G.ev.x, y:G.ev.y, kind:G.ev.type});
+
+  if(cam.third && !G.hidden)
+    list.push({x:G.px, y:G.py, kind:'avatar', face:G.dir, walk:G.walk, mine:true});
+
+  const now = performance.now();
+  for(const id in G.peers){
+    const p = G.peers[id];
+    if(now - p.seen > 2200 || p.door !== G.door || p.hid) continue;
+    list.push({x:p.x, y:p.y, kind:'avatar', face:p.dir, walk:p.walk||0, name:p.name});
+  }
+
+  list.forEach(s => { s.d = (s.x-cam.x)*(s.x-cam.x) + (s.y-cam.y)*(s.y-cam.y); });
+  list.sort((a,b) => b.d - a.d);
+
+  const invDet = 1/(pxp*dy - dx*pyp);
+  list.forEach(s => {
+    const S = SHAPES[s.kind];
+    const rx = s.x - cam.x, ry = s.y - cam.y;
+    const tx = invDet * (dy*rx - dx*ry);
+    const ty = invDet * (-pyp*rx + pxp*ry);
+    if(ty <= 0.12 || ty > 22) return;
+
+    const scr = (W/2) * (1 + tx/ty);
+    const h = H/ty;
+    let wide = S.w;
+    if(s.kind === 'coin') wide = S.w * (0.25 + 0.75*Math.abs(Math.cos(G.t*2.6 + s.ref.phase)));
+    const sw = h*wide, px0 = scr - sw/2;
+    const floorY = H/2 + h/2, ceilY = H/2 - h/2;
+    let f = litness(s.x, s.y, Math.sqrt(s.d)) * (S.glow ? 1.35 : 1);
+    if(s.lit !== undefined) f *= 0.3 + 0.95*s.lit;
+    if(s.kind === 'charger' || s.kind === 'listener') f = Math.min(1, f + 0.25);
+
+    // a figure seen from behind has no face, and its legs swing as it walks
+    let showFace = true, swing = 0;
+    if(s.kind === 'avatar'){
+      const away = Math.cos(s.face - Math.atan2(s.y - cam.y, s.x - cam.x));
+      showFace = away < -0.1;
+      swing = Math.sin(s.walk) * 0.06;
+    }
+
+    const r0 = Math.max(0, Math.floor(px0/STRIP)), r1 = Math.min(RAYS-1, Math.ceil((px0+sw)/STRIP));
+    for(let r=r0;r<=r1;r++){
+      if(ty >= zbuf[r]) continue;
+      const u = ((r*STRIP + STRIP/2) - px0)/sw - 0.5;
+      if(u < -0.5 || u > 0.5) continue;
+      for(let i=0;i<S.boxes.length;i++){
+        const b = S.boxes[i];
+        if(b.face && !showFace) continue;
+        if(u < b.x0 || u >= b.x1) continue;
+        let y0 = b.y0, y1 = b.y1;
+        if(b.leg){ y1 += swing*b.leg; }
+        if(b.arm){ y0 -= swing*b.arm; y1 -= swing*b.arm; }
+        const yTop = S.anchor === 'ceiling' ? ceilY + h*y0 : floorY - h*y1;
+        const yBot = S.anchor === 'ceiling' ? ceilY + h*y1 : floorY - h*y0;
+        ctx.fillStyle = shade(b.c, f);
+        ctx.fillRect(r*STRIP, yTop, STRIP+1, Math.max(1, yBot-yTop));
+      }
+    }
+
+    if(s.kind === 'lamp' && ty < 9){
+      const gg = ctx.createRadialGradient(scr, ceilY + h*0.36, 0, scr, ceilY + h*0.36, h*0.42);
+      gg.addColorStop(0,'rgba(255,238,190,' + (0.34*s.lit).toFixed(3) + ')');
+      gg.addColorStop(1,'rgba(255,238,190,0)');
+      ctx.fillStyle = gg; ctx.fillRect(scr - h*0.42, ceilY, h*0.84, h*0.8);
+    }
+    if(s.name && ty < 12 && ty < zbuf[Math.max(0, Math.min(RAYS-1, Math.floor(scr/STRIP)))]){
+      ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+      ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(239,227,199,.85)';
+      ctx.fillText(s.name, scr, floorY - h*1.22);
+    }
+  });
+
+  ctx.restore();
+
+  /* overlays */
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.95);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.78)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  if(G.hidden){
+    ctx.fillStyle = 'rgba(2,5,4,.94)';
+    ctx.fillRect(0,0,W,H*0.30); ctx.fillRect(0,H*0.66,W,H*0.34);
+    ctx.fillRect(0,0,W*0.14,H); ctx.fillRect(W*0.86,0,W*0.14,H);
+  }
+  if(G.ev && G.ev.type === 'charger' && G.ev.phase === 'warn'){
+    ctx.fillStyle = 'rgba(70,0,0,' + (0.10 + 0.12*Math.sin(G.ev.t*22)) + ')';
+    ctx.fillRect(0,0,W,H);
+  }
+  if(G.pop > 0){
+    ctx.fillStyle = 'rgba(255,252,240,' + (G.pop*0.38) + ')';
+    ctx.fillRect(0,0,W,H);
+  }
+  if(G.flash > 0){ ctx.fillStyle = 'rgba(201,162,75,' + (G.flash*0.22) + ')'; ctx.fillRect(0,0,W,H); }
+  if(G.fade > 0){ ctx.fillStyle = 'rgba(4,10,8,' + G.fade + ')'; ctx.fillRect(0,0,W,H); }
+
+  /* what you are holding, seen from your own eyes */
+  if(G.view === 'first'){
+    if(G.holdCross > 0){
+      const a = Math.min(1, G.holdCross), cx = W/2, cy = H*0.62 + (1-a)*60;
+      ctx.fillStyle = 'rgba(214,176,90,' + a + ')';
+      ctx.fillRect(cx-9, cy-70, 18, 100);
+      ctx.fillRect(cx-34, cy-42, 68, 18);
+      ctx.fillStyle = 'rgba(248,232,180,' + a + ')';
+      ctx.fillRect(cx-4, cy-66, 8, 92);
+    } else if(G.torch && G.battery > 0){
+      const bx = W*0.78, by = H*0.86 + Math.sin(G.bob)*3;
+      ctx.fillStyle = '#2C3238'; ctx.fillRect(bx, by, 96, 26);
+      ctx.fillStyle = '#7E868C'; ctx.fillRect(bx-22, by-4, 24, 34);
+      ctx.fillStyle = 'rgba(250,242,204,' + (0.5 + 0.5*Math.min(1, G.battery/25)) + ')';
+      ctx.fillRect(bx-26, by-1, 5, 28);
+    } else if(G.lit){
+      const bx = W*0.80, by = H*0.88 + Math.sin(G.bob)*3;
+      ctx.fillStyle = '#A89A70'; ctx.fillRect(bx, by, 26, 34);
+      const fl = 10 + Math.random()*8;
+      ctx.fillStyle = 'rgba(255,186,84,.85)';
+      ctx.fillRect(bx+9, by-fl, 8, fl);
+      ctx.fillStyle = 'rgba(255,238,190,.9)';
+      ctx.fillRect(bx+11, by-fl*0.55, 4, fl*0.55);
+    }
+  }
+
+  const fo = focused();
+  if(fo && !G.over){
+    const txt = fo.kind === 'out' ? 'Press E to step out'
+              : fo.kind === 'closet' ? 'Press E to hide' : 'Press E to search';
+    ctx.font = '15px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    const w = ctx.measureText(txt).width;
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(W/2-w/2-12, H*0.80, w+24, 26);
+    ctx.fillStyle = '#EFE3C7'; ctx.fillText(txt, W/2, H*0.80+18);
+  }
+}
+
+/* ---------- co-op over BroadcastChannel (same computer, several windows) ---------- */
+let chan = null;
+function joinRoom(code){
+  if(chan){ try{ chan.postMessage({t:'bye', id:G.me}); chan.close(); }catch(e){} }
+  G.room = code || 'lobby';
+  G.seed = hash(G.room);
+  G.peers = {};
+  buildRoom();
+  if(typeof BroadcastChannel === 'undefined'){
+    document.getElementById('netNote').textContent = 'this browser cannot link windows — single player only';
+    return;
+  }
+  chan = new BroadcastChannel('fiftydoors-' + G.room);
+  chan.onmessage = ev => {
+    const m = ev.data;
+    if(!m || m.id === G.me) return;
+    if(m.t === 'bye'){ delete G.peers[m.id]; return; }
+    m.seen = performance.now();
+    G.peers[m.id] = m;
+  };
+  document.getElementById('netNote').textContent = 'room "' + G.room + '" — everyone in it walks into identical rooms';
+}
+function shout(){
+  if(!chan) return;
+  chan.postMessage({
+    t:'pos', id:G.me, name:G.me.slice(0,5), door:G.door,
+    x:G.px, y:G.py, dir:G.dir, walk:G.walk, hid:!!G.hidden, hp:G.hp
+  });
+}
+addEventListener('beforeunload', () => { if(chan) chan.postMessage({t:'bye', id:G.me}); });
+document.getElementById('joinBtn').addEventListener('click', () => {
+  joinRoom(document.getElementById('code').value.trim().toLowerCase());
+});
+
+/* ---------- shell ---------- */
+function say(html){ lineEl.innerHTML = html; }
+function paintHud(){
+  document.getElementById('doorNo').textContent = Math.min(G.door, 50);
+  document.getElementById('hpNo').textContent = Math.max(0, Math.round(G.hp));
+  document.getElementById('fill').style.width = Math.max(0, G.hp) + '%';
+  document.getElementById('coinNo').textContent = G.coins;
+  document.getElementById('battNo').textContent = Math.round(G.battery);
+}
+function end(title, text){
+  G.over = true;
+  document.getElementById('ovTitle').textContent = title;
+  document.getElementById('ovText').innerHTML = text;
+  document.getElementById('over').hidden = false;
+  if(document.exitPointerLock) document.exitPointerLock();
+}
+document.getElementById('again').addEventListener('click', () => {
+  document.getElementById('over').hidden = true;
+  G.over = false; G.hp = 100; G.coins = 0; G.door = 1;
+  G.inv = {lighter:1}; G.sel = 1; G.torch = false; G.lit = false; G.battery = 100;
+  paintHud(); paintInv(); buildRoom();
+});
+
+let last = performance.now(), netAt = 0;
+function loop(now){
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  G.t += dt;
+  stepLamps(dt);
+  if(!G.over){
+    if(useE){ interact(); useE = false; }
+    if(useF){ useItem(); useF = false; }
+    if(useC){ raiseCross(); useC = false; }
+    move(dt);
+    updateEvent(dt);
+    if(G.torch){
+      G.battery = Math.max(0, G.battery - dt*3.2);
+      if(G.battery <= 0){ G.torch = false; say('<span class="warn">The beam browns out and dies.</span>'); paintInv(); }
+      if(Math.floor(G.t*2) !== Math.floor((G.t-dt)*2)) paintHud();
+    }
+  } else { useE = useF = useC = false; }
+
+  if(G.shake > 0) G.shake = Math.max(0, G.shake - dt*1.5);
+  if(G.fade > 0)  G.fade  = Math.max(0, G.fade - dt*2.2);
+  if(G.flash > 0) G.flash = Math.max(0, G.flash - dt*1.6);
+  if(G.pop > 0)   G.pop   = Math.max(0, G.pop - dt*3.4);
+  if(G.holy > 0)  G.holy  = Math.max(0, G.holy - dt*0.8);
+  if(G.holdCross > 0) G.holdCross = Math.max(0, G.holdCross - dt*0.7);
+
+  if(now - netAt > 66){
+    netAt = now; shout();
+    let n = 0;
+    for(const id in G.peers){
+      if(now - G.peers[id].seen > 2200) delete G.peers[id];
+      else n++;
+    }
+    document.getElementById('peerNo').textContent = n;
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+joinRoom('lobby');
+paintHud();
+paintInv();
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
